@@ -1,17 +1,18 @@
-# Replace your streamlit_app.py with this minimal version first:
-
 import streamlit as st
 import pandas as pd
 import os
 
+# PAGE CONFIG MUST BE FIRST
 st.set_page_config(page_title="MovieLens Analytics", layout="wide")
 
+# THEN styling
 st.markdown("""<style>
 .stApp { background-color: #0D0221; color: #FFFFFF; }
 [data-testid="stSidebar"] { background-color: #1A0033; border-right: 2px solid #7B2CBF; }
 h1, h2, h3 { color: #E0AAFF; }
 </style>""", unsafe_allow_html=True)
 
+# THEN cache functions
 @st.cache_data
 def download_from_google_drive():
     import gdown
@@ -29,6 +30,7 @@ def load_data():
     df = pd.read_parquet(data_file)
     return df
 
+# NOW load and display
 st.title("MovieLens Analytics Dashboard")
 
 try:
