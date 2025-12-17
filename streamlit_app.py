@@ -1,22 +1,12 @@
 """
 PHASE 2: STREAMLIT ANALYTICS DASHBOARD
-=======================================
-A comprehensive movie analytics platform with business insights.
+========================================
+Movie recommendation analytics with Cinematic Purple theme.
 
-SETUP INSTRUCTIONS:
-1. Install dependencies:
-   pip install streamlit pandas numpy matplotlib seaborn plotly
+Auto-downloads data from Google Drive on first load.
 
-2. Run the app:
-   streamlit run 2_app.py
-
-3. Open in browser:
-   http://localhost:8501
-
-COLOR SCHEME: Cinematic Purple
-- Primary: #7B2CBF (Deep Purple)
-- Secondary: #0D0221 (Deep Black)
-- Accent: #E0AAFF (Light Purple)
+Run:
+    streamlit run streamlit_app.py
 """
 
 import streamlit as st
@@ -24,10 +14,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import matplotlib.pyplot as plt
-import seaborn as sns
-from datetime import datetime, timedelta
+import os
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -44,24 +31,20 @@ st.set_page_config(
 # Custom CSS for Cinematic Purple theme
 st.markdown("""
     <style>
-    /* Main background */
     .stApp {
         background-color: #0D0221;
         color: #FFFFFF;
     }
     
-    /* Sidebar styling */
     [data-testid="stSidebar"] {
         background-color: #1A0033;
         border-right: 2px solid #7B2CBF;
     }
     
-    /* Title styling */
     h1, h2, h3 {
         color: #E0AAFF;
     }
     
-    /* Metric cards */
     [data-testid="metric-container"] {
         background-color: #1A0033;
         border: 1px solid #7B2CBF;
@@ -69,7 +52,6 @@ st.markdown("""
         padding: 15px;
     }
     
-    /* Buttons */
     .stButton > button {
         background-color: #7B2CBF;
         color: #FFFFFF;
@@ -80,64 +62,81 @@ st.markdown("""
     
     .stButton > button:hover {
         background-color: #9D4EDD;
-        border-color: #E0AAFF;
     }
     
-    /* Sliders */
-    .stSlider {
-        color: #7B2CBF;
-    }
-    
-    /* Selectbox and multiselect */
-    [data-testid="stSelectbox"], [data-testid="stMultiSelect"] {
-        background-color: #1A0033;
-    }
-    
-    /* Radio buttons */
-    [data-testid="stRadio"] {
-        color: #FFFFFF;
-    }
-    
-    /* Expander */
     [data-testid="stExpander"] {
         border: 1px solid #7B2CBF;
         border-radius: 8px;
     }
     
-    /* Divider/Markdown */
     hr {
         border-color: #7B2CBF;
     }
     
-    /* Text styling */
     p {
         color: #D0D0D0;
-    }
-    
-    /* Dataframe */
-    [data-testid="dataFrame"] {
-        background-color: #1A0033;
     }
     </style>
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# CACHING FUNCTION
+# DOWNLOAD DATA FROM GOOGLE DRIVE
 # ============================================================================
+
+@st.cache_data
+def download_from_google_drive():
+    """
+    Download ratings_sample_cleaned.parquet from Google Drive.
+    """
+    import gdown
+    
+    FILE_ID = "1S4Lklg1e1LpbjSnfmUdSxD3jhE0kGlBN"
+    output_file = "ratings_sample_cleaned.parquet"
+    
+    if not os.path.exists(output_file):
+        st.info("First load: Downloading data from Google Drive (30-60 seconds)...")
+        try:
+            gdown.download(
+                f"https://drive.google.com/uc?id={FILE_ID}",
+                output_file,
+                quiet=False
+            )
+            st.success("Data downloaded successfully!")
+        except Exception as e:
+            st.error(f"Error downloading data: {e}")
+            st.error("Please check your Google Drive FILE_ID is correct.")
+            return None
+    
+    return output_file
+
+# ============================================================================
+# LOAD DATA
+# ============================================================================
+
 @st.cache_data
 def load_data():
-    """Load cleaned data from Phase 1."""
-    df = pd.read_parquet('ratings_sample_cleaned.parquet')
+    """Load cleaned data from parquet file."""
+    # Ensure data file exists
+    data_file = download_from_google_drive()
+    
+    if data_file is None or not os.path.exists(data_file):
+        st.error("Data file not found. Please check Google Drive setup.")
+        st.stop()
+    
+    df = pd.read_parquet(data_file)
     
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     df['year'] = df['year'].astype(int)
     df['month'] = df['month'].astype(int)
-    
     df['genres_list'] = df['genres'].str.split('|')
     
     return df
 
-df = load_data()
+try:
+    df = load_data()
+except Exception as e:
+    st.error(f"Error loading data: {e}")
+    st.stop()
 
 # ============================================================================
 # SIDEBAR: FILTERS & NAVIGATION
@@ -186,8 +185,8 @@ rating_threshold = st.sidebar.slider(
 )
 
 st.sidebar.markdown("---")
-
 st.sidebar.subheader("Data Summary")
+
 filtered_df = df[
     (df['year'] >= year_range[0]) & 
     (df['year'] <= year_range[1]) &
@@ -201,6 +200,7 @@ st.sidebar.metric("Unique Movies", f"{filtered_df['movieId'].nunique():,}")
 # ============================================================================
 # APPLY FILTERS FUNCTION
 # ============================================================================
+
 def apply_filters(data):
     """Apply sidebar filters to dataframe."""
     filtered = data[
@@ -222,6 +222,7 @@ filtered_df = apply_filters(df)
 # ============================================================================
 # PAGE 1: OVERVIEW DASHBOARD
 # ============================================================================
+
 if page == "Overview":
     st.title("Overview")
     st.markdown("High-level metrics and trends across the dataset")
@@ -371,6 +372,7 @@ if page == "Overview":
 # ============================================================================
 # PAGE 2: USER BEHAVIOR ANALYSIS
 # ============================================================================
+
 elif page == "User Behavior":
     st.title("User Behavior Analysis")
     st.markdown("Understanding how different users rate movies")
@@ -538,6 +540,7 @@ elif page == "User Behavior":
 # ============================================================================
 # PAGE 3: CONTENT ANALYSIS
 # ============================================================================
+
 elif page == "Content Analysis":
     st.title("Content Analysis")
     st.markdown("Deep dive into movie characteristics and ratings")
@@ -671,6 +674,7 @@ elif page == "Content Analysis":
 # ============================================================================
 # PAGE 4: HIDDEN GEMS FINDER
 # ============================================================================
+
 elif page == "Hidden Gems":
     st.title("Hidden Gems Finder")
     st.markdown("Discover underrated movies with high ratings but low visibility")
@@ -802,9 +806,12 @@ elif page == "Hidden Gems":
 # ============================================================================
 # FOOTER
 # ============================================================================
+
 st.markdown("---")
 st.markdown(
     """
-   
+    MovieLens Analytics Dashboard - Phase 2
+    
+    Filters active in sidebar | Data auto-downloaded from Google Drive | Ready for Phase 3 ML Models
     """
 )
