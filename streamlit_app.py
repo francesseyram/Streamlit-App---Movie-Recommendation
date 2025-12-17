@@ -127,7 +127,14 @@ def load_data():
     return df
 
 # Load data
-df = load_data()
+try:
+    df = load_data()
+    st.success("Data loaded successfully!")
+except Exception as e:
+    st.error(f"Failed to load data: {str(e)}")
+    import traceback
+    st.write(traceback.format_exc())
+    st.stop()
 
 # ============================================================================
 # SIDEBAR - FILTERS & NAVIGATION
@@ -158,14 +165,18 @@ year_range = st.sidebar.slider(
 available_genres = set()
 for genres_list in df['genres_list']:
     if isinstance(genres_list, list):
-        available_genres.update(genres_list)
-available_genres = sorted([g for g in available_genres if g])
+        available_genres.update([g for g in genres_list if g and isinstance(g, str)])
+available_genres = sorted(list(available_genres))
 
-selected_genres = st.sidebar.multiselect(
-    "Filter by Genre",
-    available_genres,
-    default=None
-)
+if available_genres:
+    selected_genres = st.sidebar.multiselect(
+        "Filter by Genre",
+        available_genres,
+        default=None
+    )
+else:
+    selected_genres = []
+    st.sidebar.warning("No genres found in data")
 
 # Rating threshold
 rating_threshold = st.sidebar.slider(
