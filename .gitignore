@@ -1,0 +1,15 @@
+# Large data files
+ratings.csv
+tags.csv
+genome-scores.csv
+ratings_sample_cleaned.parquet
+
+# Python cache
+__pycache__/
+*.pyc
+.DS_Store
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
