@@ -85,16 +85,14 @@ st.markdown("""
 
 @st.cache_data
 def download_from_google_drive():
-    """
-    Download ratings_sample_cleaned.parquet from Google Drive.
-    """
+    """Download ratings_sample_cleaned.parquet from Google Drive."""
     import gdown
     
     FILE_ID = "1S4Lklg1e1LpbjSnfmUdSxD3jhE0kGlBN"
     output_file = "ratings_sample_cleaned.parquet"
     
     if not os.path.exists(output_file):
-        st.info("First load: Downloading data from Google Drive (30-60 seconds)...")
+        st.info("First load: Downloading data from Google Drive...")
         try:
             gdown.download(
                 f"https://drive.google.com/uc?id={FILE_ID}",
@@ -104,7 +102,6 @@ def download_from_google_drive():
             st.success("Data downloaded successfully!")
         except Exception as e:
             st.error(f"Error downloading data: {e}")
-            st.error("Please check your Google Drive FILE_ID is correct.")
             return None
     
     return output_file
@@ -115,27 +112,45 @@ def download_from_google_drive():
 
 @st.cache_data
 def load_data():
-    """Load cleaned data from parquet file."""
-    # Ensure data file exists
+    """Load cleaned data from parquet file with detailed error handling."""
+    
+    # Download file
     data_file = download_from_google_drive()
     
     if data_file is None or not os.path.exists(data_file):
-        st.error("Data file not found. Please check Google Drive setup.")
+        st.error("Data file not found!")
         st.stop()
     
-    df = pd.read_parquet(data_file)
+    try:
+        # Load parquet
+        df = pd.read_parquet(data_file)
+        
+        st.info(f"✓ Loaded {len(df):,} ratings")
+        st.info(f"✓ Columns: {list(df.columns)}")
+        
+        # Process timestamp
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', errors='coerce')
+        
+        # Process year/month
+        df['year'] = pd.to_numeric(df['year'], errors='coerce').astype('Int64')
+        df['month'] = pd.to_numeric(df['month'], errors='coerce').astype('Int64')
+        
+        # Parse genres
+        df['genres_list'] = df['genres'].fillna('').str.split('|')
+        
+        return df
     
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
-    df['year'] = df['year'].astype(int)
-    df['month'] = df['month'].astype(int)
-    df['genres_list'] = df['genres'].str.split('|')
-    
-    return df
+    except Exception as e:
+        st.error(f"Critical Error: {str(e)}")
+        st.write("Full traceback:")
+        import traceback
+        st.write(traceback.format_exc())
+        st.stop()
 
 try:
     df = load_data()
 except Exception as e:
-    st.error(f"Error loading data: {e}")
+    st.error(f"Failed to load data: {e}")
     st.stop()
 
 # ============================================================================
@@ -156,9 +171,9 @@ st.sidebar.subheader("Filters")
 
 year_range = st.sidebar.slider(
     "Rating Year Range",
-    min_value=df['year'].min(),
-    max_value=df['year'].max(),
-    value=(df['year'].min(), df['year'].max()),
+    min_value=int(df['year'].min()),
+    max_value=int(df['year'].max()),
+    value=(int(df['year'].min()), int(df['year'].max())),
     help="Filter data by year of rating"
 )
 
@@ -166,7 +181,7 @@ available_genres = set()
 for genres_list in df['genres_list']:
     if isinstance(genres_list, list):
         available_genres.update(genres_list)
-available_genres = sorted(list(available_genres))
+available_genres = sorted([g for g in available_genres if g])
 
 selected_genres = st.sidebar.multiselect(
     "Filter by Genre",
@@ -233,29 +248,25 @@ if page == "Overview":
         st.metric(
             label="Average Rating",
             value=f"{filtered_df['rating'].mean():.2f}",
-            delta=f"{filtered_df['rating'].mean() - 3.5:.2f} vs baseline",
-            help="Overall average rating"
+            delta=f"{filtered_df['rating'].mean() - 3.5:.2f} vs baseline"
         )
     
     with col2:
         st.metric(
             label="Median Rating",
-            value=f"{filtered_df['rating'].median():.1f}",
-            help="Middle value (50th percentile)"
+            value=f"{filtered_df['rating'].median():.1f}"
         )
     
     with col3:
         st.metric(
             label="Std Deviation",
-            value=f"{filtered_df['rating'].std():.2f}",
-            help="Spread of ratings"
+            value=f"{filtered_df['rating'].std():.2f}"
         )
     
     with col4:
         st.metric(
             label="Data Points",
-            value=f"{len(filtered_df):,}",
-            help="Number of ratings"
+            value=f"{len(filtered_df):,}"
         )
     
     st.markdown("---")
@@ -326,48 +337,50 @@ if page == "Overview":
     for genres_list, rating in zip(filtered_df['genres_list'], filtered_df['rating']):
         if isinstance(genres_list, list):
             for g in genres_list:
-                all_genres.append(g)
-                genre_ratings.append(rating)
+                if g:
+                    all_genres.append(g)
+                    genre_ratings.append(rating)
     
-    genre_df = pd.DataFrame({'genre': all_genres, 'rating': genre_ratings})
-    genre_stats = genre_df.groupby('genre').agg({
-        'rating': ['mean', 'count', 'std']
-    }).round(2)
-    genre_stats.columns = ['avg_rating', 'count', 'std_dev']
-    genre_stats = genre_stats.sort_values('avg_rating', ascending=False)
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Bar(
-        x=genre_stats.index,
-        y=genre_stats['avg_rating'],
-        marker=dict(
-            color=genre_stats['avg_rating'],
-            colorscale=[[0, '#7B2CBF'], [1, '#E0AAFF']],
-            showscale=True,
-            colorbar=dict(title="Avg Rating", thickness=15)
-        ),
-        text=genre_stats['avg_rating'].round(2),
-        textposition='outside',
-        hovertemplate='<b>%{x}</b><br>Average Rating: %{y:.2f}<br>Count: ' + 
-                      genre_stats['count'].astype(str) + '<extra></extra>'
-    ))
-    
-    fig.update_layout(
-        title="Which genres are rated highest?",
-        xaxis_title="Genre",
-        yaxis_title="Average Rating",
-        height=400,
-        hovermode='x unified',
-        template='plotly_dark',
-        paper_bgcolor='#0D0221',
-        plot_bgcolor='#1A0033',
-        font=dict(color='#FFFFFF')
-    )
-    st.plotly_chart(fig, use_container_width=True)
-    
-    with st.expander("View Genre Statistics"):
-        st.dataframe(genre_stats.reset_index(), use_container_width=True)
+    if all_genres:
+        genre_df = pd.DataFrame({'genre': all_genres, 'rating': genre_ratings})
+        genre_stats = genre_df.groupby('genre').agg({
+            'rating': ['mean', 'count', 'std']
+        }).round(2)
+        genre_stats.columns = ['avg_rating', 'count', 'std_dev']
+        genre_stats = genre_stats.sort_values('avg_rating', ascending=False)
+        
+        fig = go.Figure()
+        
+        fig.add_trace(go.Bar(
+            x=genre_stats.index,
+            y=genre_stats['avg_rating'],
+            marker=dict(
+                color=genre_stats['avg_rating'],
+                colorscale=[[0, '#7B2CBF'], [1, '#E0AAFF']],
+                showscale=True,
+                colorbar=dict(title="Avg Rating", thickness=15)
+            ),
+            text=genre_stats['avg_rating'].round(2),
+            textposition='outside',
+            hovertemplate='<b>%{x}</b><br>Average Rating: %{y:.2f}<br>Count: ' + 
+                          genre_stats['count'].astype(str) + '<extra></extra>'
+        ))
+        
+        fig.update_layout(
+            title="Which genres are rated highest?",
+            xaxis_title="Genre",
+            yaxis_title="Average Rating",
+            height=400,
+            hovermode='x unified',
+            template='plotly_dark',
+            paper_bgcolor='#0D0221',
+            plot_bgcolor='#1A0033',
+            font=dict(color='#FFFFFF')
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        with st.expander("View Genre Statistics"):
+            st.dataframe(genre_stats.reset_index(), use_container_width=True)
 
 # ============================================================================
 # PAGE 2: USER BEHAVIOR ANALYSIS
