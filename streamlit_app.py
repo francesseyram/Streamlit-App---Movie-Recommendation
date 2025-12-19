@@ -132,15 +132,11 @@ def load_data(show_spinner=False):
     
     return df
 
-if "df" not in st.session_state:
-    with st.spinner("Loading data (first run may take up to 60 seconds)..."):
-        try:
-            st.session_state.df = load_data()
-        except Exception as e:
-            st.error(f"Error loading data: {e}")
-            st.stop()
-
-df = st.session_state.df
+try:
+    df = load_data()
+except Exception as e:
+    st.error(f"Error loading data: {e}")
+    st.stop()
 
 # ============================================================================
 # SIDEBAR: FILTERS & NAVIGATION
