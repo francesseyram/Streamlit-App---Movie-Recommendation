@@ -114,7 +114,7 @@ def download_from_google_drive():
 # ============================================================================
 
 @st.cache_data
-def load_data():
+def load_data(show_spinner=False):
     """Load cleaned data from parquet file."""
     # Ensure data file exists
     data_file = download_from_google_drive()
@@ -132,11 +132,15 @@ def load_data():
     
     return df
 
-try:
-    df = load_data()
-except Exception as e:
-    st.error(f"Error loading data: {e}")
-    st.stop()
+if "df" not in st.session_state:
+    with st.spinner("Loading data (first run may take up to 60 seconds)..."):
+        try:
+            st.session_state.df = load_data()
+        except Exception as e:
+            st.error(f"Error loading data: {e}")
+            st.stop()
+
+df = st.session_state.df
 
 # ============================================================================
 # SIDEBAR: FILTERS & NAVIGATION
