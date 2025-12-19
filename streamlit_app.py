@@ -114,7 +114,7 @@ def download_from_google_drive():
 # ============================================================================
 
 @st.cache_data
-def load_data(show_spinner=False):
+def load_data():
     """Load cleaned data from parquet file."""
     # Ensure data file exists
     data_file = download_from_google_drive()
